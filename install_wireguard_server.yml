@@ -1,0 +1,126 @@
+---
+- name: Установка и настройка сервера WireGuard
+  hosts: all
+  become: true
+  vars:
+      # INPUT - Пароль для сервера WireGuard
+      PasswordServer: "{{ PasswordServer }}"
+      #
+      container_name: k_wireguard
+      container_image: kybix/wireguard
+  tasks:
+      - name: mount folder
+        block:
+#            # - name: mkdir inShare
+#             # command: "mkdir -p /home/inWg"
+#              # ignore_errors: yes
+#            
+            - name: mkdir wireguard
+              file:
+                path: /root/wireguard
+                state: directory
+              
+#            - name: Установить nfs-common
+#              apt:
+#                  name:
+#                      - nfs-common
+#                  state: present
+#              
+#            - name: mount_nfs  
+#              mount:
+#                src: 192.168.85.116:/home/kybix/Share
+#                path: /root/wireguard
+#                opts: rw,sync,hard
+#                boot: false
+#                state: mounted
+#                fstype: nfs
+        
+      - name: Установка Docker
+        block:
+            - name: Обновление apt
+              apt:
+                  update_cache: yes
+
+            - name: Установить Docker зависимости
+              apt:
+                  name:
+                      - gnupg
+                  state: present
+
+            - name: Добавить Docker GPG ключ
+              apt_key:
+                  url: https://download.docker.com/linux/ubuntu/gpg
+                  state: present
+
+            - name: Добавление Docker репозитория
+              apt_repository:
+                  repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu focal stable"
+                  state: present
+
+#            - name: Установка зависимостей
+#              apt:
+#                  name: "{{ item }}"
+#                  state: present
+#                  install_recommends: yes
+#              loop:
+#                  - docker-ce
+# 
+      - name: Запуск Docker
+        block:
+            - name: Остановка прошлого Docker контейнера(если ошибка, то игнорируем)
+              command: "docker container stop {{ container_name }} "
+              ignore_errors: yes
+
+            - name: Удалеям остановленные контейнеры
+              command: "docker container prune -f"
+
+
+            - name: Запуск новый Docker контейнер
+              command: |
+                    docker run --rm \
+                      --name={{ container_name }} \
+                      --cap-add sys_module \
+                      --cap-add net_admin \
+                      -e PUBLIC_IP={{ ansible_host_wg }} \
+                      -e PORT={{ ansible_port_wg }} \
+                      -e DNS=8.8.8.8 \
+                      -e SUBNET=10.88 \
+                      -e SUBNET_PREFIX=16 \
+                      -e SUBNET_IP=10.88.0.1/16 \
+                      -v /root/wireguard:/etc/wireguard \
+                      -p {{ ansible_port_wg }}:51821/udp \
+                      {{ container_image }}
+
+      - name: Создание systemd-службы для авто заупска контейнера
+        block:
+            - name: Создание конфигурационного автозапуска Docker
+              copy:
+                  dest: "/etc/systemd/system/{{ container_name }}.service"
+                  content: |
+                      [Unit]
+                      Description=Docker Container: {{ container_name }}
+                      Requires=docker.service
+                      After=docker.service
+
+                      [Service]
+                      Restart=always
+                      ExecStartPre=/usr/bin/docker pull {{ container_image }}
+                      ExecStart=/usr/bin/docker start -a {{ container_name }}
+                      ExecStop=/usr/bin/docker stop -t 10 {{ container_name }}
+
+                      [Install]
+                      WantedBy=multi-user.target
+
+            - name: Перезапуск systemd
+              systemd:
+                  name: "{{ container_name }}.service"
+                  daemon_reload: yes
+                  state: restarted
+
+            - name: Включение службы в автозапуск
+              systemd:
+                  name: "{{ container_name }}.service"
+                  enabled: yes
+
+            - name: Запуск контейнера Docker
+              command: "docker start {{ container_name }}"
