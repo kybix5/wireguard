@@ -2,7 +2,7 @@ version: "3"
 services:
 
   wireguard:
-    image: denisix/wireguard
+    image: kybix/wireguard
     environment:
       - PUBLIC_IP=1.2.3.4
       - PORT=55555
