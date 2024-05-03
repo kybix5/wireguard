@@ -33,7 +33,7 @@ docker run --rm \
   -e SUBNET_PREFIX=16 \
   -e SUBNET_IP=10.88.0.1/16 \
   -v ./wireguard:/etc/wireguard \
-  -p 55555:55555/udp denisix/wireguard
+  -p 55555:55555/udp kybix/wireguard
 ```
 
 - Sample **[docker-compose.yml](https://raw.githubusercontent.com/denisix/wireguard/main/docker-compose.yml)** file:
@@ -43,7 +43,7 @@ version: "3"
 services:
 
   wireguard:
-    image: denisix/wireguard
+    image: kybix/wireguard
     environment:
       - PUBLIC_IP=1.2.3.4
       - PORT=55555
